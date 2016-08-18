@@ -1,11 +1,17 @@
 package main
 
-import "flag"
-import "fmt"
-import "strings"
-import "bytes"
-import "unicode/utf8"
-import "os"
+import (
+	"bufio"
+	"bytes"
+	"flag"
+	"fmt"
+	"log"
+	"math/rand"
+	"os"
+	"strings"
+	"time"
+	"unicode/utf8"
+)
 
 const noSource string = "\x00\x01\x02\x03\x04"
 
@@ -14,6 +20,9 @@ type cowSayOptions struct {
 }
 
 func main() {
+
+	rand.Seed(time.Now().UTC().UnixNano())
+
 	var opts cowSayOptions
 	flag.StringVar(&opts.source,
 		"from",
@@ -24,21 +33,57 @@ func main() {
 	flag.IntVar(&wrapLen, "wrap", 55, "number of characters from string per line.")
 	flag.Parse()
 
+	var txt string
+
 	if noSource != opts.source {
+		var source *os.File
+
+		if opts.source == "--" {
+			// read from stdin
+			source = os.Stdin
+		} else {
+			var err error
+			source, err = os.Open(opts.source)
+			if err != nil {
+				log.Fatalln(err)
+			} else {
+				defer source.Close()
+			}
+		}
+
+		buf := bufio.NewScanner(source)
+
+		sourceLines := make([]string, 0, 0)
+
+		for buf.Scan() {
+			sourceLines = append(sourceLines, buf.Text())
+		}
+
+		if err := buf.Err(); err != nil {
+			log.Fatalln(err)
+		}
+
+		if len(sourceLines) <= 0 {
+			log.Fatalln("No lines in source file.")
+		}
+
+		sourceLines = append(sourceLines, "")
+
+		txt = sourceLines[rand.Int31n(int32(len(sourceLines)))]
 
 	} else if len(flag.Args()) != 1 {
 		flag.Usage()
 		os.Exit(-1)
 	} else {
 		// Regular arg
-		txt := flag.Args()[0]
-		out, err := encowseString(&txt, wrapLen)
-		if err != nil {
-			panic(err.Error())
-		} else {
+		txt = flag.Args()[0]
+	}
 
-			fmt.Println(out)
-		}
+	out, err := encowseString(&txt, wrapLen)
+	if err != nil {
+		log.Fatalln(err.Error())
+	} else {
+		fmt.Println(out)
 	}
 }
 
@@ -106,13 +151,13 @@ func makeTextBox(text *string, wrapLen int) (string, error) {
 
 func wrap(text *string, wrapLen int) ([]string, error) {
 	out := make([]string, 0, strings.Count(*text, " "))
-	words := strings.Split(*text, " ")
+	words := strings.Fields(*text)
 	currentLine := ""
 
 	for _, word := range words {
 		wordLen := utf8.RuneCountInString(word)
 		if wordLen > wrapLen {
-			return out, fmt.Errorf("%s too long for line wrap of %d chars", word, wrapLen)
+			return out, fmt.Errorf("\"%s\" too long for line wrap of %d chars", word, wrapLen)
 		} else if utf8.RuneCountInString(currentLine)+wordLen > wrapLen {
 			// Start new line
 			out = append(out, currentLine)
