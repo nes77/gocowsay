@@ -163,7 +163,11 @@ func wrap(text *string, wrapLen int) ([]string, error) {
 			out = append(out, currentLine)
 			currentLine = word
 		} else {
-			currentLine = currentLine + " " + word
+            if currentLine != "" {
+			    currentLine = currentLine + " " + word
+            } else {
+                currentLine = word
+            }
 		}
 	}
 
